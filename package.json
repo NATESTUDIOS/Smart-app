@@ -1,0 +1,28 @@
+{
+  "name": "gemini-extract-api",
+  "version": "1.0.0",
+  "description": "A Node.js Vercel-style API that extracts code, text, and image URLs using Gemini 2.5 Flash.",
+  "main": "api/extract.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "node api/extract.js"
+  },
+  "keywords": [
+    "vercel",
+    "nodejs",
+    "api",
+    "gemini",
+    "ai",
+    "extractor",
+    "code-parser"
+  ],
+  "author": "Fort N",
+  "license": "MIT",
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
