@@ -12,17 +12,24 @@ export default async function handler(req, res) {
 
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.5-flash" });
 
-    const result = await model.generateContent([
-      { role: "user", parts: [{ text: prompt }] },
-    ]);
+    // ✅ Correct Gemini SDK usage — just pass string input
+    const result = await model.generateContent(prompt);
 
-    const imageBase64 = result.response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    // ✅ Gemini sometimes returns image data inside parts[].inlineData.data
+    const imageBase64 =
+      result?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
     if (!imageBase64) {
-      return res.status(500).json({ success: false, error: "No image generated" });
+      return res.status(500).json({
+        success: false,
+        error: "No image generated",
+        details: "The model did not return inline image data.",
+      });
     }
 
+    // ✅ Return a valid base64 data URL
     const imageUrl = `data:image/png;base64,${imageBase64}`;
 
     res.status(200).json({
