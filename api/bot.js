@@ -88,12 +88,10 @@ ${text}
     // Final structured return
     res.status(200).json({
       success: true,
-      response: {
         Code: parsed.Code || null,
         Language: parsed.Language || null,
         Text: parsed.Text || "Processed successfully.",
         ImageUrl: parsed.ImageUrl || null,
-      },
     });
   } catch (err) {
     console.error("Gemini API error:", err);
