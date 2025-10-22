@@ -1,4 +1,3 @@
-// api/extract.js
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req, res) {
@@ -21,36 +20,53 @@ export default async function handler(req, res) {
       model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
     });
 
-    // Prompt to structure response clearly
+    // Improved reasoning prompt
     const prompt = `
-Analyze the given input text. Return JSON with these fields:
+You are an intelligent AI extraction and generation engine.
+
+You will receive a user input that may:
+- Contain code,
+- Contain text,
+- Include image URLs,
+- Or be a prompt asking you to *generate* something (like "build a website" or "create a scraping tool").
+
+Your job:
+1. **Understand intent**: determine whether to extract or generate.
+2. **If generating**, create high-quality and complete code relevant to the request (use HTML/CSS/JS/Python/etc.).
+3. **Always respond in JSON ONLY** with this schema:
+
 {
-  "Code": string or null,        // Extract code if any, else null
-  "Language": string or null,    // Detected code language (html, js, etc.)
-  "Text": string or null,        // Remaining plain text without code
-  "ImageUrl": string or null     // Image URL if included
+  "Code": string | null,         // The extracted or generated code
+  "Language": string | null,     // Language name (html, js, python, etc.)
+  "Text": string | null,         // Pure text explanation, if any
+  "ImageUrl": string | null      // Image URL if mentioned or generated
 }
 
-If code exists, wrap it in the parameter style like this:
-Code: <!--hello world->
+Rules:
+- If code exists, wrap it like this: Code: <!--your code here->
+- If input is a creation request, actually generate the code intelligently.
+- If code or text are mixed, separate them clearly.
+- Be concise but complete in code generation.
+- Use null instead of empty strings.
 
 Input:
 ${text}
 `;
 
-    // Generate output from Gemini
+    // Generate output
     const result = await model.generateContent(prompt);
     const output = result?.response?.text?.() || "";
 
-    // Try parsing JSON output
+    // Try parsing structured JSON
     let parsed;
     try {
       parsed = JSON.parse(output);
     } catch {
+      // Fallback: interpret as plain text
       parsed = { Text: output };
     }
 
-    // Fallback heuristics if needed
+    // Secondary heuristics for missed code or image
     if (!parsed.Code && /```/.test(text)) {
       const match = text.match(/```(\w+)?\s*([\s\S]*?)```/m);
       if (match) {
@@ -66,6 +82,7 @@ ${text}
       if (urlMatch) parsed.ImageUrl = urlMatch[1];
     }
 
+    // Final structured response
     res.status(200).json({
       success: true,
       response: {
@@ -77,6 +94,10 @@ ${text}
     });
   } catch (err) {
     console.error("Gemini API error:", err);
-    res.status(500).json({ success: false, error: "Internal Server Error" });
+    res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+      details: err.message,
+    });
   }
 }
