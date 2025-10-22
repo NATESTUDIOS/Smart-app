@@ -8,9 +8,10 @@ export default async function handler(req, res) {
   const { text } = req.body;
 
   if (!text || typeof text !== "string" || !text.trim()) {
-    return res
-      .status(400)
-      .json({ success: false, error: "Text (non-empty string) is required" });
+    return res.status(400).json({
+      success: false,
+      error: "Text (non-empty string) is required",
+    });
   }
 
   try {
@@ -20,53 +21,57 @@ export default async function handler(req, res) {
       model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
     });
 
-    // Improved reasoning prompt
+    // 🧩 Intelligent extraction + generation prompt
     const prompt = `
-You are an intelligent AI extraction and generation engine.
+You are a precise AI engine for analyzing or generating technical content.
+The user input may contain or request:
+- Code (for any programming language)
+- Text (explanation, message, or idea)
+- Image URL(s)
+- Or a creative request (like "build a scraper" or "create a portfolio site")
 
-You will receive a user input that may:
-- Contain code,
-- Contain text,
-- Include image URLs,
-- Or be a prompt asking you to *generate* something (like "build a website" or "create a scraping tool").
+Your responsibilities:
+1. **Understand the intent.**
+   - If input includes code → Extract and describe it.
+   - If input requests code (e.g. "build", "create", "generate") → Generate high-quality, complete code for that.
+   - If input includes both → Separate clearly.
+   - If input has image URLs → Extract them.
 
-Your job:
-1. **Understand intent**: determine whether to extract or generate.
-2. **If generating**, create high-quality and complete code relevant to the request (use HTML/CSS/JS/Python/etc.).
-3. **Always respond in JSON ONLY** with this schema:
-
+2. **Always return valid JSON only**, following exactly this structure:
 {
-  "Code": string | null,         // The extracted or generated code
-  "Language": string | null,     // Language name (html, js, python, etc.)
-  "Text": string | null,         // Pure text explanation, if any
-  "ImageUrl": string | null      // Image URL if mentioned or generated
+  "Code": string | null,        // The actual code, wrapped like this: Code: <!--your code here->
+  "Language": string | null,    // Language of the code (html, js, python, etc.)
+  "Text": string | null,        // Human-readable description or explanation
+  "ImageUrl": string | null     // Image URL if present or relevant
 }
 
-Rules:
-- If code exists, wrap it like this: Code: <!--your code here->
-- If input is a creation request, actually generate the code intelligently.
-- If code or text are mixed, separate them clearly.
-- Be concise but complete in code generation.
-- Use null instead of empty strings.
+Guidelines:
+- NEVER include markdown (like \`\`\`) in the output.
+- NEVER include explanations outside JSON.
+- Be concise but complete — functional and well-formatted code.
+- If uncertain, infer the most likely code language.
+- Use null for any missing field.
 
-Input:
+Now process this input carefully and respond ONLY with JSON:
+---
 ${text}
+---
 `;
 
-    // Generate output
+    // Generate response
     const result = await model.generateContent(prompt);
     const output = result?.response?.text?.() || "";
 
-    // Try parsing structured JSON
+    // Attempt JSON parse
     let parsed;
     try {
       parsed = JSON.parse(output);
-    } catch {
-      // Fallback: interpret as plain text
+    } catch (err) {
+      console.warn("Gemini returned unstructured output. Attempting fallback parse...");
       parsed = { Text: output };
     }
 
-    // Secondary heuristics for missed code or image
+    // 🛠️ Fallbacks — just in case Gemini skips something
     if (!parsed.Code && /```/.test(text)) {
       const match = text.match(/```(\w+)?\s*([\s\S]*?)```/m);
       if (match) {
@@ -76,19 +81,17 @@ ${text}
     }
 
     if (!parsed.ImageUrl) {
-      const urlMatch = text.match(
-        /(https?:\/\/[^\s]+(?:png|jpg|jpeg|gif|webp|svg))/i
-      );
+      const urlMatch = text.match(/(https?:\/\/[^\s]+(?:png|jpg|jpeg|gif|webp|svg))/i);
       if (urlMatch) parsed.ImageUrl = urlMatch[1];
     }
 
-    // Final structured response
+    // Final structured return
     res.status(200).json({
       success: true,
       response: {
         Code: parsed.Code || null,
         Language: parsed.Language || null,
-        Text: parsed.Text || text,
+        Text: parsed.Text || "Processed successfully.",
         ImageUrl: parsed.ImageUrl || null,
       },
     });
